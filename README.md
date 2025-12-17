@@ -77,7 +77,7 @@ It runs these steps in order:
    - Retries the API validators with these enhanced queries.
 3. **Web Search Agent** (`agents/webSearchAgent.ts`)
    - Uses **Perplexity** (model `sonar-pro`) to search the web and extract structured reference metadata.
-   - Controlled by `VITE_PERPLEXITY_API_KEY` in your `.env`.
+   - Requires `PERPLEXITY_API_KEY` in your server `.env` file (API key is kept server-side for security).
 4. **Explanation Agent** (`agents/explanationAgent.ts`)
    - If the reference still can’t be confirmed, generates a short explanation of what was tried and suggestions for manual verification.
    - Uses your preferred LLM if configured, otherwise uses a built-in fallback explanation.
@@ -172,12 +172,15 @@ Access settings via the gear icon to configure:
 
 The app can run without any API keys, but some optional features require them.
 
-- **Perplexity Web Search (agent-based mode)**:
-  - `VITE_PERPLEXITY_API_KEY` (used by the Web Search Agent)
-- **Academic APIs (optional)**:
-  - Semantic Scholar supports an optional key via settings
-- **LLM providers (optional)**:
-  - OpenAI / Anthropic / Gemini keys are configured in the UI settings (not required for GROBID extraction)
+- **Server-side (in `.env` file)**:
+  - `PERPLEXITY_API_KEY` - For web search in agent-based validation mode
+  - `PORT` - API proxy port (default: 5174)
+  - `GROBID_URL` - GROBID service URL (default: http://localhost:8070)
+- **Client-side (configured in Settings UI)**:
+  - Semantic Scholar API key (optional, for higher rate limits)
+  - OpenAI / Anthropic / Gemini keys (for LLM-based extraction)
+
+See `.env.example` for a complete template.
 
 ## Troubleshooting
 
@@ -259,6 +262,118 @@ src/
 - **Semantic Scholar**: Free tier available, API key optional for higher limits
 - **OpenAlex**: Free, no key required
 - **ArXiv**: Free, rate limit 1 request/3 seconds
+
+## Security
+
+See [SECURITY.md](./SECURITY.md) for security practices, deployment recommendations, and vulnerability reporting.
+
+---
+
+## Roadmap / Future Plans
+
+### 🚧 Claim Verification System (Planned)
+
+A comprehensive claim verification feature is planned that will allow users to verify whether in-text citations actually support the claims being made. This system will analyze the relationship between what an author claims and what the cited source actually says.
+
+#### Planned Architecture
+
+```mermaid
+flowchart TB
+    subgraph Frontend["Frontend (React)"]
+        PDF[PDF Viewer]
+        RefList[Reference List]
+        ClaimUI[Claim Verification UI]
+    end
+    
+    subgraph Backend["Node.js Backend"]
+        CitationParser[Citation Parser]
+        SourceFetcher[Source Text Fetcher]
+        EmbeddingService[Embedding Service]
+        NLIService[NLI Inference]
+        LLMVerifier[LLM Verifier]
+    end
+    
+    subgraph Models["Local Models (ONNX)"]
+        MiniLM[all-MiniLM-L6-v2]
+        RoBERTa[roberta-large-mnli]
+    end
+    
+    PDF --> CitationParser
+    CitationParser --> SourceFetcher
+    SourceFetcher --> EmbeddingService
+    EmbeddingService --> MiniLM
+    EmbeddingService --> NLIService
+    NLIService --> RoBERTa
+    NLIService --> ClaimUI
+```
+
+#### Planned Features
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Citation Extraction** | Extract in-text citations with surrounding context | 🔲 Planned |
+| **Regex Parser** | Fast extraction using regex patterns (`[1]`, `(Author, 2023)`, etc.) | 🔲 Planned |
+| **LLM Parser** | More accurate extraction using OpenAI/Anthropic/Gemini | 🔲 Planned |
+| **Source Text Fetching** | Retrieve abstracts from CrossRef, arXiv, Semantic Scholar, Unpaywall | 🔲 Planned |
+| **Sentence Embeddings** | Local embeddings using all-MiniLM-L6-v2 (ONNX) | 🔲 Planned |
+| **NLI Verification** | Natural Language Inference using roberta-large-mnli | 🔲 Planned |
+| **LLM Verification** | Alternative verification using user's LLM API keys | 🔲 Planned |
+| **Verdict System** | Multi-level verdicts (strongly supported → contradicted) | 🔲 Planned |
+| **PDF Claim Highlighting** | Visual highlighting of claims in PDF (distinct from references) | 🔲 Planned |
+| **Collapsible PDF Panel** | Full-width reference list with collapsible PDF | 🔲 Planned |
+
+#### Planned Verdict Types
+
+The claim verification system will produce nuanced verdicts:
+
+- 🟢 **Strongly Supported** - High similarity + entailment from source
+- 🟢 **Supported** - Good similarity + entailment
+- 🟡 **Weakly Supported** - Moderate similarity + neutral/entailment
+- 🟡 **Related but Insufficient** - Similar sentences but neutral NLI
+- 🟠 **Likely Contradicted** - Weak contradiction signal
+- 🔴 **Contradicted** - Clear contradiction found
+- ⚪ **Weakly Related** - Low similarity, no strong signal
+- ⚪ **Not Found** - No relevant sentences found in source
+
+#### Verification Methods
+
+Users will be able to choose between:
+
+1. **NLI Model (Local)** - Free after model download, runs locally using ONNX
+2. **LLM (API)** - Uses configured API keys, provides explanations
+3. **Both** - NLI first, then LLM for confirmation on borderline cases
+
+#### New Settings (Planned)
+
+```typescript
+interface ClaimVerificationSettings {
+  enabled: boolean;
+  citationExtractionMethod: 'regex' | 'llm';
+  verificationMethod: 'nli' | 'llm' | 'both';
+  topK: number;              // Evidence sentences to consider
+  similarityThreshold: number;
+}
+```
+
+### Other Future Enhancements
+
+- **Batch Processing** - Process multiple PDFs at once
+- **Citation Graph Visualization** - Visualize citation relationships
+- **Browser Extension** - Quick reference checking from any webpage
+- **Collaborative Annotations** - Share verification results with team
+- **Custom Validation Rules** - Define project-specific validation criteria
+
+---
+
+## Contributing
+
+Contributions are welcome! Please see the roadmap above for planned features that could use help.
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
 
 ## License
 
